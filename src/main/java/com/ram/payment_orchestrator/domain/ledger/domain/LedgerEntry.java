@@ -1,4 +1,4 @@
-package com.ram.payment_orchestrator.domain.ledger.model;
+package com.ram.payment_orchestrator.domain.ledger.domain;
 
 import java.time.Instant;
 

@@ -1,8 +1,8 @@
 package com.ram.payment_orchestrator.domain.ledger.service;
 
-import com.ram.payment_orchestrator.domain.ledger.model.AccountType;
-import com.ram.payment_orchestrator.domain.ledger.model.EntryType;
-import com.ram.payment_orchestrator.domain.ledger.model.LedgerEntry;
+import com.ram.payment_orchestrator.domain.ledger.domain.AccountType;
+import com.ram.payment_orchestrator.domain.ledger.domain.EntryType;
+import com.ram.payment_orchestrator.domain.ledger.domain.LedgerEntry;
 import com.ram.payment_orchestrator.domain.ledger.persistence.LedgerEntryEntity;
 import com.ram.payment_orchestrator.domain.ledger.persistence.LedgerRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,12 +39,12 @@ public class LedgerService {
             }
         }
 
-        if (totalBalance != 0) {
+        if (totalBalance != 0) {  // zero-sum validation
             throw new IllegalStateException("Ledger entries must be balanced (zero-sum). Current imbalance: " + totalBalance);
         }
 
         List<LedgerEntryEntity> entities = entries.stream()
-                .map(this::mapToEntity)
+                .map(entry -> mapToEntity(entry))
                 .toList();
 
         ledgerRepository.saveAll(entities);

@@ -1,7 +1,7 @@
 package com.ram.payment_orchestrator.domain.ledger.persistence;
 
-import com.ram.payment_orchestrator.domain.ledger.model.AccountType;
-import com.ram.payment_orchestrator.domain.ledger.model.EntryType;
+import com.ram.payment_orchestrator.domain.ledger.domain.AccountType;
+import com.ram.payment_orchestrator.domain.ledger.domain.EntryType;
 import jakarta.persistence.*;
 import lombok.*;
 
