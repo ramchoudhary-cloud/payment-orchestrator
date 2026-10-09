@@ -20,6 +20,7 @@ public class Payment {
     private final String providerOperationId; // From PSP after charge
     private final String resolverOwner;       // Who owns the UNKNOWN resolution
     private final Instant resolverLeaseUntil; // When ownership expires
+    private final int resolutionAttempts;
     private final PaymentStatus status;
     private final Instant createdAt;
     private final Instant updatedAt;
