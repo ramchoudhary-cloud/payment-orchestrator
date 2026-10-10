@@ -10,55 +10,50 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
-public class ProviderAStub implements PaymentProviderAdapter {
+public class ProviderBStub implements PaymentProviderAdapter {
 
     private final Map<String, StatusResult> operations = new ConcurrentHashMap<>();
     private final long latencyMs;
     private final long timeoutMs;
     private final boolean unavailable;
     private final boolean chargeOnTimeout;
-    private final int outageAfterCharges;
-    private final AtomicInteger chargeCalls = new AtomicInteger();
 
-    public ProviderAStub(
-            @Value("${providers.a.latency-ms:0}") long latencyMs,
-            @Value("${providers.a.timeout-ms:10000}") long timeoutMs,
-            @Value("${providers.a.unavailable:false}") boolean unavailable,
-            @Value("${providers.a.charge-on-timeout:false}") boolean chargeOnTimeout,
-            @Value("${providers.a.outage-after-charges:0}") int outageAfterCharges) {
+    public ProviderBStub(
+            @Value("${providers.b.latency-ms:0}") long latencyMs,
+            @Value("${providers.b.timeout-ms:10000}") long timeoutMs,
+            @Value("${providers.b.unavailable:false}") boolean unavailable,
+            @Value("${providers.b.charge-on-timeout:false}") boolean chargeOnTimeout
+    ) {
         this.latencyMs = Math.max(0, latencyMs);
         this.timeoutMs = Math.max(0, timeoutMs);
         this.unavailable = unavailable;
         this.chargeOnTimeout = chargeOnTimeout;
-        this.outageAfterCharges = Math.max(0, outageAfterCharges);
     }
 
     @Override
     public String providerCode() {
-        return "PROVIDER_A";
+        return "PROVIDER_B";
     }
 
     @Override
     public ChargeResult charge(ChargeRequest request) {
-        int callNumber = chargeCalls.incrementAndGet();
-        if (unavailable || (outageAfterCharges > 0 && callNumber > outageAfterCharges)) {
+        if (unavailable) {
             return new ChargeResult(Outcome.UNREACHABLE, ProviderStatus.UNKNOWN, null);
         }
 
         delay();
         if (latencyMs > timeoutMs) {
             if (chargeOnTimeout) {
-                String providerRef = "pa_" + request.providerOperationId();
+                String providerRef = "pb_" + request.providerOperationId();
                 operations.put(request.providerOperationId(),
                         new StatusResult(ProviderStatus.CHARGED, providerRef));
             }
             return new ChargeResult(Outcome.TIMEOUT, ProviderStatus.UNKNOWN, null);
         }
 
-        String providerRef = "pa_" + request.providerOperationId();
+        String providerRef = "pb_" + request.providerOperationId();
         operations.put(request.providerOperationId(),
                 new StatusResult(ProviderStatus.CHARGED, providerRef));
         return new ChargeResult(Outcome.ACCEPTED, ProviderStatus.CHARGED, providerRef);
@@ -78,7 +73,7 @@ public class ProviderAStub implements PaymentProviderAdapter {
             Thread.sleep(latencyMs);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Provider A stub call interrupted", exception);
+            throw new IllegalStateException("Provider B stub call interrupted", exception);
         }
     }
 }
