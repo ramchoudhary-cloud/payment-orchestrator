@@ -7,6 +7,7 @@ import com.ram.payment_orchestrator.domain.payment.domain.Payment;
 import com.ram.payment_orchestrator.domain.payment.domain.PaymentRequest;
 import com.ram.payment_orchestrator.domain.payment.domain.PaymentStatus;
 import com.ram.payment_orchestrator.domain.payment.service.PaymentOrchestrationService;
+import com.ram.payment_orchestrator.domain.payment.service.PaymentService;
 import com.ram.payment_orchestrator.security.MerchantIdentity;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class PaymentController {
     private final PaymentRequestHasher requestHasher;
     private final IdempotencyService idempotencyService;
     private final PaymentOrchestrationService orchestrationService;
+    private final PaymentService paymentService;
     private final JsonMapper jsonMapper;
 
     @PostMapping
@@ -53,7 +55,9 @@ public class PaymentController {
             case REPLAY -> replay(claim.storedResponse());
             case CONFLICT -> ResponseEntity.status(CONFLICT).<PaymentResponse>build();
             case ERROR -> ResponseEntity.status(INTERNAL_SERVER_ERROR).<PaymentResponse>build();
-            case SUCCESS -> processClaimedRequest(request, merchantId, idempotencyKey, claim);
+            case SUCCESS -> claim.reclaimed()
+                    ? recoverClaimedRequest(request, merchantId, idempotencyKey, claim)
+                    : processClaimedRequest(request, merchantId, idempotencyKey, claim);
         };
     }
 
@@ -85,6 +89,28 @@ public class PaymentController {
         );
 
         Payment payment = orchestrationService.process(paymentRequest);
+        return completeClaim(payment, claim);
+    }
+
+    private ResponseEntity<PaymentResponse> recoverClaimedRequest(
+            CreatePaymentRequest request,
+            String merchantId,
+            String idempotencyKey,
+            ClaimResult claim) {
+
+        Optional<Payment> existingPayment = paymentService
+                .findByMerchantAndIdempotencyKey(merchantId, idempotencyKey);
+
+        if (existingPayment.isPresent()) {
+            // A prior request already created the durable payment/provider operation.
+            // Reuse it; never send another charge for this idempotency key.
+            return completeClaim(existingPayment.get(), claim);
+        }
+
+        return processClaimedRequest(request, merchantId, idempotencyKey, claim);
+    }
+
+    private ResponseEntity<PaymentResponse> completeClaim(Payment payment, ClaimResult claim) {
         PaymentResponse response = new PaymentResponse(
                 payment.getPaymentId(),
                 payment.getStatus().name(),
@@ -93,7 +119,7 @@ public class PaymentController {
                 PROVIDER_CODE
         );
 
-        int responseStatus = payment.getStatus() == PaymentStatus.UNKNOWN
+        int responseStatus = isPending(payment.getStatus())
                 ? ACCEPTED.value()
                 : CREATED.value();
 
@@ -110,5 +136,12 @@ public class PaymentController {
         }
 
         return ResponseEntity.status(responseStatus).body(response);
+    }
+
+    private boolean isPending(PaymentStatus status) {
+        return status == PaymentStatus.INITIATED
+                || status == PaymentStatus.ROUTED
+                || status == PaymentStatus.UNKNOWN
+                || status == PaymentStatus.RESOLVING;
     }
 }
