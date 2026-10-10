@@ -9,7 +9,8 @@ public record ClaimResult(
     Status status,
     Long idempotencyId,
     String ownerId,
-    Optional<StoredResponse> storedResponse
+    Optional<StoredResponse> storedResponse,
+    boolean reclaimed
 ) {
     public enum Status {
         SUCCESS,        // Claimed successfully, proceed with work
@@ -19,14 +20,18 @@ public record ClaimResult(
     }
 
     public static ClaimResult success(Long id, String ownerId) {
-        return new ClaimResult(Status.SUCCESS, id, ownerId, Optional.empty());
+        return new ClaimResult(Status.SUCCESS, id, ownerId, Optional.empty(), false);
+    }
+
+    public static ClaimResult reclaimed(Long id, String ownerId) {
+        return new ClaimResult(Status.SUCCESS, id, ownerId, Optional.empty(), true);
     }
 
     public static ClaimResult replay(StoredResponse response) {
-        return new ClaimResult(Status.REPLAY, null, null, Optional.of(response));
+        return new ClaimResult(Status.REPLAY, null, null, Optional.of(response), false);
     }
 
     public static ClaimResult conflict() {
-        return new ClaimResult(Status.CONFLICT, null, null, Optional.empty());
+        return new ClaimResult(Status.CONFLICT, null, null, Optional.empty(), false);
     }
 }

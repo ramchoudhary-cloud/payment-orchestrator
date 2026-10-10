@@ -8,7 +8,10 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "idempotency_keys",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"merchantId", "idempotencyKey"})
+       uniqueConstraints = @UniqueConstraint(
+               name = "uk_idempotency",
+               columnNames = {"merchant_id", "idempotency_key"}
+       )
 )
 @Getter
 @Setter
@@ -21,34 +24,38 @@ public class IdempotencyKeyEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "merchant_id", nullable = false, length = 64)
     private String merchantId;
 
-    @Column(name = "idempotency_key", nullable = false)
+    @Column(name = "idempotency_key", nullable = false, length = 128)
     private String idempotencyKey;
 
-    @Column(nullable = false)
+    @Column(name = "request_hash", nullable = false, length = 64)
     private String requestHash;
 
+    @Column(name = "payment_id", length = 36)
     private String paymentId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 16)
     private IdempotencyStatus status;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "response_snapshot", columnDefinition = "TEXT")
     private String responseSnapshot; // Stored JSON response
 
+    @Column(name = "response_status")
     private Integer responseStatus;   // HTTP status code (e.g., 201)
 
+    @Column(name = "owner_id", length = 64)
     private String ownerId;           // Identity of the worker claiming this request
 
+    @Column(name = "lease_until")
     private Instant leaseUntil;       // When the claim expires (for crash recovery)
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(nullable = false)
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     @PrePersist

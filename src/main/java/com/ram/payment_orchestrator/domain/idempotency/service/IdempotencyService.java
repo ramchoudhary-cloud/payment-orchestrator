@@ -60,7 +60,7 @@ public class IdempotencyService {
         int updated = repository.reclaimExpired(merchantId, key, requestHash, ownerId, leaseUntil);
 
         if (updated > 0) {
-            return ClaimResult.success(entity.getId(), ownerId);
+            return ClaimResult.reclaimed(entity.getId(), ownerId);
         }
 
         return ClaimResult.conflict();
