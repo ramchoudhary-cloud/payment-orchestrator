@@ -8,30 +8,35 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "ledger_entries", 
-     uniqueConstraints = @UniqueConstraint(columnNames = {"paymentId", "accountType", "entryType"})
-) // handles duplicate LedgerEntry
+@Table(
+        name = "ledger_entries",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_ledger_entry_payment_account_entry",
+                columnNames = {"payment_id", "account_type", "entry_type"}
+        )
+)
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class LedgerEntryEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id", nullable = false)
     private Long id;
 
-    @Column(nullable = false)
-    private String paymentId;  // foreign key
+    @Column(name = "payment_id", nullable = false, length = 36)
+    private String paymentId;
 
-    @Column(nullable = false)
+    @Column(name = "amount_minor", nullable = false)
     private long amountMinor;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "account_type", nullable = false, length = 32)
     private AccountType accountType;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "entry_type", nullable = false, length = 16)
     private EntryType entryType;
 
-    @Column(nullable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 }
