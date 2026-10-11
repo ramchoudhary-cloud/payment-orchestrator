@@ -16,6 +16,14 @@ public class PaymentRequestHasher {
                 + field(request.currency())
                 + field(request.paymentToken());
 
+        return digest(canonical);
+    }
+
+    public String hashRefund(String paymentId) {
+        return digest(field("refund") + field(paymentId));
+    }
+
+    private String digest(String canonical) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(canonical.getBytes(StandardCharsets.UTF_8));

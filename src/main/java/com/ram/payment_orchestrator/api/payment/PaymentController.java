@@ -6,6 +6,7 @@ import com.ram.payment_orchestrator.domain.idempotency.service.IdempotencyServic
 import com.ram.payment_orchestrator.domain.payment.domain.Payment;
 import com.ram.payment_orchestrator.domain.payment.domain.PaymentRequest;
 import com.ram.payment_orchestrator.domain.payment.domain.PaymentStatus;
+import com.ram.payment_orchestrator.domain.payment.service.PaymentAttemptPersistenceService;
 import com.ram.payment_orchestrator.domain.payment.service.PaymentOrchestrationService;
 import com.ram.payment_orchestrator.domain.payment.service.PaymentService;
 import com.ram.payment_orchestrator.security.MerchantIdentity;
@@ -28,13 +29,12 @@ import static org.springframework.http.HttpStatus.*;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    private static final String PROVIDER_CODE = "PROVIDER_A";
-
     private final MerchantIdentity merchantIdentity;
     private final PaymentRequestHasher requestHasher;
     private final IdempotencyService idempotencyService;
     private final PaymentOrchestrationService orchestrationService;
     private final PaymentService paymentService;
+    private final PaymentAttemptPersistenceService attemptPersistenceService;
     private final JsonMapper jsonMapper;
 
     @PostMapping
@@ -116,7 +116,7 @@ public class PaymentController {
                 payment.getStatus().name(),
                 payment.getAmountMinor(),
                 payment.getCurrency(),
-                PROVIDER_CODE
+                attemptPersistenceService.currentProviderCode(payment)
         );
 
         int responseStatus = isPending(payment.getStatus())
