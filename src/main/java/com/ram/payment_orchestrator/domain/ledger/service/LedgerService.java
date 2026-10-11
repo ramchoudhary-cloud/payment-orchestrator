@@ -28,6 +28,29 @@ public class LedgerService {
         saveAndValidate(List.of(debitProvider, creditMerchant)); // bundled both entries to list and send
     }
 
+    @Transactional
+    public void recordRefund(String paymentId, long amountMinor) {
+        LedgerEntry debitMerchant = LedgerEntry.newEntry(
+                paymentId, amountMinor, AccountType.MERCHANT_BALANCE, EntryType.DEBIT);
+
+        LedgerEntry creditProvider = LedgerEntry.newEntry(
+                paymentId, amountMinor, AccountType.PROVIDER_CLEARING, EntryType.CREDIT);
+
+        saveAndValidate(List.of(debitMerchant, creditProvider));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasRefund(String paymentId) {
+        List<LedgerEntryEntity> entries = ledgerRepository.findByPaymentId(paymentId);
+        boolean merchantDebit = entries.stream().anyMatch(entry ->
+                entry.getAccountType() == AccountType.MERCHANT_BALANCE
+                        && entry.getEntryType() == EntryType.DEBIT);
+        boolean providerCredit = entries.stream().anyMatch(entry ->
+                entry.getAccountType() == AccountType.PROVIDER_CLEARING
+                        && entry.getEntryType() == EntryType.CREDIT);
+        return merchantDebit && providerCredit;
+    }
+
     private void saveAndValidate(List<LedgerEntry> entries) {
         long totalBalance = 0;
 
