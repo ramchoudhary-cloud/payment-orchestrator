@@ -1,5 +1,6 @@
 package com.ram.payment_orchestrator.domain.payment.persistence;
 
+import com.ram.payment_orchestrator.domain.reconciliation.domain.InternalSettlementRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -14,6 +15,18 @@ import java.util.Optional;
 
 @Repository
 public interface PaymentRepository extends JpaRepository<PaymentEntity, String> {
+
+    @Query(value = """
+            SELECT a.provider_code AS providerCode,
+                   a.provider_ref AS providerRef,
+                   p.amount_minor AS amountMinor
+            FROM payments p
+            JOIN provider_attempts a
+              ON a.payment_id = p.payment_id
+             AND a.provider_operation_id = p.provider_operation_id
+            WHERE p.status = 'SUCCESS'
+            """, nativeQuery = true)
+    List<InternalSettlementRecord> findSuccessfulPaymentsForReconciliation();
 
     Optional<PaymentEntity> findByMerchantIdAndIdempotencyKey(String merchantId, String idempotencyKey);
 

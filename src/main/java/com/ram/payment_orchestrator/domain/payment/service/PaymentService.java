@@ -69,6 +69,18 @@ public class PaymentService {
     }
 
     @Transactional
+    public Payment routePaymentAfterDefinitiveFailure(
+            Payment payment,
+            String providerOperationId
+    ) {
+        return transition(
+                payment,
+                PaymentStatus.FAILED,
+                p -> p.transition(PaymentStatus.ROUTED, providerOperationId)
+        );
+    }
+
+    @Transactional
     public Payment markAsUnknown(Payment payment, String providerOperationId) {
         return transition(payment, PaymentStatus.ROUTED, p -> p.transition(PaymentStatus.UNKNOWN, providerOperationId));
     }

@@ -1,6 +1,8 @@
 package com.ram.payment_orchestrator.domain.payment.service;
 
 import com.ram.payment_orchestrator.domain.ledger.service.LedgerService;
+import com.ram.payment_orchestrator.domain.outbox.domain.PaymentEventType;
+import com.ram.payment_orchestrator.domain.outbox.service.OutboxService;
 import com.ram.payment_orchestrator.domain.payment.domain.Payment;
 import com.ram.payment_orchestrator.domain.provider.domain.ChargeResult;
 import com.ram.payment_orchestrator.domain.provider.domain.Outcome;
@@ -18,6 +20,7 @@ public class PaymentFinalizationService {
     private final PaymentService paymentService;
     private final ProviderAttemptRepository attemptRepository;
     private final LedgerService ledgerService;
+    private final OutboxService outboxService;
 
     @Transactional
     public Payment finalizeCharge(Payment payment, String providerCode, ChargeResult result) {
@@ -40,9 +43,14 @@ public class PaymentFinalizationService {
                         payment, payment.getProviderOperationId()
                 );
                 ledgerService.recordCapture(succeeded.getPaymentId(), succeeded.getAmountMinor());
+                outboxService.stagePaymentTerminalEvent(succeeded, PaymentEventType.PAYMENT_SUCCEEDED);
                 yield succeeded;
             }
-            case DECLINED, REJECTED, UNREACHABLE -> paymentService.markAsFailed(payment);
+            case DECLINED, REJECTED, UNREACHABLE -> {
+                Payment failed = paymentService.markAsFailed(payment);
+                outboxService.stagePaymentTerminalEvent(failed, PaymentEventType.PAYMENT_FAILED);
+                yield failed;
+            }
             case TIMEOUT, AMBIGUOUS -> paymentService.markAsUnknown(
                     payment, payment.getProviderOperationId()
             );

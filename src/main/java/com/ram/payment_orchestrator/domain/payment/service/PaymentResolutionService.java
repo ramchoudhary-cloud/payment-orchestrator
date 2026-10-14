@@ -1,6 +1,8 @@
 package com.ram.payment_orchestrator.domain.payment.service;
 
 import com.ram.payment_orchestrator.domain.ledger.service.LedgerService;
+import com.ram.payment_orchestrator.domain.outbox.domain.PaymentEventType;
+import com.ram.payment_orchestrator.domain.outbox.service.OutboxService;
 import com.ram.payment_orchestrator.domain.payment.domain.PaymentStatus;
 import com.ram.payment_orchestrator.domain.payment.persistence.PaymentEntity;
 import com.ram.payment_orchestrator.domain.payment.persistence.PaymentRepository;
@@ -8,6 +10,8 @@ import com.ram.payment_orchestrator.domain.provider.domain.ProviderStatus;
 import com.ram.payment_orchestrator.domain.provider.domain.StatusResult;
 import com.ram.payment_orchestrator.domain.provider.persistence.ProviderAttemptEntity;
 import com.ram.payment_orchestrator.domain.provider.persistence.ProviderAttemptRepository;
+import com.ram.payment_orchestrator.domain.payment.persistence.FailoverWorkEntity;
+import com.ram.payment_orchestrator.domain.payment.persistence.FailoverWorkRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +27,8 @@ public class PaymentResolutionService {
     private final PaymentRepository paymentRepository;
     private final ProviderAttemptRepository attemptRepository;
     private final LedgerService ledgerService;
+    private final FailoverWorkRepository failoverWorkRepository;
+    private final OutboxService outboxService;
 
     @Transactional
     public List<ResolutionCandidate> claimBatch(
@@ -101,13 +107,27 @@ public class PaymentResolutionService {
         if (status == null) {
             status = ProviderStatus.UNKNOWN;
         }
+        attempt.setResolvedStatus(status);
 
         switch (status) {
             case CHARGED -> {
                 payment.setStatus(PaymentStatus.SUCCESS);
                 ledgerService.recordCapture(payment.getPaymentId(), payment.getAmountMinor());
+                outboxService.stagePaymentTerminalEvent(
+                        payment.getPaymentId(),
+                        payment.getMerchantRef(),
+                        PaymentStatus.SUCCESS,
+                        payment.getAmountMinor(),
+                        payment.getCurrency(),
+                        PaymentEventType.PAYMENT_SUCCEEDED
+                );
             }
-            case NOT_CHARGED_DEFINITIVE -> payment.setStatus(PaymentStatus.FAILED);
+            case NOT_CHARGED_DEFINITIVE -> {
+                payment.setStatus(PaymentStatus.FAILED);
+                failoverWorkRepository.save(FailoverWorkEntity.pending(
+                        candidate.paymentId(), candidate.providerOperationId(), Instant.now()
+                ));
+            }
             case PENDING, UNKNOWN -> payment.setStatus(
                     payment.getResolutionAttempts() >= maxAttempts
                             ? PaymentStatus.NEEDS_MANUAL_REVIEW

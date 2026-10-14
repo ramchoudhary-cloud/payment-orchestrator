@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -31,5 +32,17 @@ public class PaymentAttemptPersistenceService {
                 .build());
 
         return routed;
+    }
+
+    @Transactional(readOnly = true)
+    public String currentProviderCode(Payment payment) {
+        return attemptRepository.findByPaymentIdAndProviderOperationId(
+                        payment.getPaymentId(),
+                        payment.getProviderOperationId()
+                )
+                .map(ProviderAttemptEntity::getProviderCode)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Provider attempt not found for payment " + payment.getPaymentId()
+                ));
     }
 }
