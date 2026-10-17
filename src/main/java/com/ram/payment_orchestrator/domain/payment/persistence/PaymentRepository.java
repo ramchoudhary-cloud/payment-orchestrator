@@ -59,13 +59,9 @@ public interface PaymentRepository extends JpaRepository<PaymentEntity, String> 
             @Param("batchSize") int batchSize
     );
 
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE payments p
-            SET status = 'NEEDS_MANUAL_REVIEW',
-                resolver_owner = NULL,
-                resolver_lease_until = NULL,
-                updated_at = :now
+            SELECT p.payment_id
+            FROM payments p
             WHERE p.resolution_attempts >= :maxAttempts
               AND p.updated_at <= :staleBefore
               AND (p.resolver_lease_until IS NULL OR p.resolver_lease_until < :now)
@@ -87,8 +83,48 @@ public interface PaymentRepository extends JpaRepository<PaymentEntity, String> 
                   WHERE a.payment_id = p.payment_id
                     AND a.provider_operation_id = p.provider_operation_id
               )
+            ORDER BY p.payment_id
+            LIMIT :batchSize
             """, nativeQuery = true)
-    int moveExhaustedToManualReview(
+    List<String> findExhaustedPaymentIds(
+            @Param("now") Instant now,
+            @Param("staleBefore") Instant staleBefore,
+            @Param("maxAttempts") int maxAttempts,
+            @Param("batchSize") int batchSize
+    );
+
+    @Modifying
+    @Query(value = """
+            UPDATE payments p
+            SET status = 'NEEDS_MANUAL_REVIEW',
+                resolver_owner = NULL,
+                resolver_lease_until = NULL,
+                updated_at = :now
+            WHERE p.payment_id = :paymentId
+              AND p.resolution_attempts >= :maxAttempts
+              AND p.updated_at <= :staleBefore
+              AND (p.resolver_lease_until IS NULL OR p.resolver_lease_until < :now)
+              AND (
+                  p.status = 'UNKNOWN'
+                  OR p.status = 'RESOLVING'
+                  OR (
+                      p.status = 'ROUTED'
+                      AND EXISTS (
+                          SELECT 1 FROM provider_attempts a
+                          WHERE a.payment_id = p.payment_id
+                            AND a.provider_operation_id = p.provider_operation_id
+                            AND a.outcome IS NULL
+                      )
+                  )
+              )
+              AND EXISTS (
+                  SELECT 1 FROM provider_attempts a
+                  WHERE a.payment_id = p.payment_id
+                    AND a.provider_operation_id = p.provider_operation_id
+              )
+            """, nativeQuery = true)
+    int moveExhaustedToManualReviewById(
+            @Param("paymentId") String paymentId,
             @Param("now") Instant now,
             @Param("staleBefore") Instant staleBefore,
             @Param("maxAttempts") int maxAttempts

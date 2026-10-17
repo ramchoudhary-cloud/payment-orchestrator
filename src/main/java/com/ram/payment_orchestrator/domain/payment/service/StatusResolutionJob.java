@@ -5,15 +5,19 @@ import com.ram.payment_orchestrator.domain.provider.domain.StatusResult;
 import com.ram.payment_orchestrator.domain.provider.service.ProviderGateway;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 @Component
 @Slf4j
 public class StatusResolutionJob {
+
+    private static final int MAX_CLAIM_ATTEMPTS = 2;
 
     private final PaymentResolutionService resolutionService;
     private final ProviderGateway providerGateway;
@@ -40,13 +44,7 @@ public class StatusResolutionJob {
     @Scheduled(fixedDelayString = "${payment.resolution.interval-ms:30000}")
     public void resolveBatch() {
         String ownerId = UUID.randomUUID().toString();
-        var candidates = resolutionService.claimBatch(
-                ownerId,
-                Duration.ofSeconds(staleAfterSeconds),
-                Duration.ofSeconds(leaseSeconds),
-                batchSize,
-                maxAttempts
-        );
+        List<PaymentResolutionService.ResolutionCandidate> candidates = claimBatchWithRetry(ownerId);
 
         for (PaymentResolutionService.ResolutionCandidate candidate : candidates) {
             try {
@@ -66,6 +64,34 @@ public class StatusResolutionJob {
             } catch (RuntimeException exception) {
                 // The lease expires and another scheduled run can reclaim this payment.
                 log.error("Could not finalize status resolution for payment {}", candidate.paymentId(), exception);
+            }
+        }
+    }
+
+    private List<PaymentResolutionService.ResolutionCandidate> claimBatchWithRetry(String ownerId) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return resolutionService.claimBatch(
+                        ownerId,
+                        Duration.ofSeconds(staleAfterSeconds),
+                        Duration.ofSeconds(leaseSeconds),
+                        batchSize,
+                        maxAttempts
+                );
+            } catch (CannotAcquireLockException exception) {
+                if (attempt >= MAX_CLAIM_ATTEMPTS) {
+                    throw exception;
+                }
+
+                log.warn("Resolver claim hit a database lock conflict; retrying once", exception);
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(
+                            "Interrupted while retrying resolver claim", interrupted
+                    );
+                }
             }
         }
     }

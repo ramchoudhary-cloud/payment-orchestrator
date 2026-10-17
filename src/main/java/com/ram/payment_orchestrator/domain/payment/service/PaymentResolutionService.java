@@ -40,7 +40,14 @@ public class PaymentResolutionService {
 
         Instant now = Instant.now();
         Instant staleBefore = now.minus(staleAfter);
-        paymentRepository.moveExhaustedToManualReview(now, staleBefore, maxAttempts);
+        List<String> exhaustedPaymentIds = paymentRepository.findExhaustedPaymentIds(
+                now, staleBefore, maxAttempts, batchSize
+        );
+        for (String paymentId : exhaustedPaymentIds) {
+            paymentRepository.moveExhaustedToManualReviewById(
+                    paymentId, now, staleBefore, maxAttempts
+            );
+        }
 
         List<PaymentEntity> payments = paymentRepository.findResolvable(
                 now, staleBefore, maxAttempts, batchSize
